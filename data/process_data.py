@@ -60,6 +60,19 @@ def clean_categories (df):
     unique_catgs.append('id')
     return pd.DataFrame(data=normalized_categories, columns=unique_catgs)
 
+
+def save_db(df_left, df_right):
+    '''
+    Parameters : two dataframe 
+    - merge the two dataframes on column "id"
+    - save the final_result into a SQLite database 
+    '''
+    final_df = df_left.merge(df_right, on='id', how='inner')
+    print(' saving the final dataframe')
+    engine = db.create_engine('sqlite:///project2.db')
+    final_df.to_sql('project2_messages', engine, index=False)
+    
+    
 # Load the datasets from the two available csv files
 print('1- Loading the data')
 messages_df = pd.read_csv('messages.csv')
@@ -91,8 +104,5 @@ print("\n 3.2- Creating 36 columns (one for each unique category)")
 print(' If message x is in category y only, column y will have value set as 1 and the rest set as 0')
 clean_categories_df = clean_categories(categories_df)
 print(clean_categories_df.info())
-print(' \n 3.3- Merging the two dataframes on the id column : ')
-final_df = messages_df.merge(clean_categories_df, on='id', how='inner')
-print(' saving the final dataframe')
-engine = db.create_engine('sqlite:///project2.db')
-final_df.to_sql('project2_messages', engine, index=False)
+print('\n 3.3- Merging the two dataframes on the id column : ')
+save_db(messages_df, clean_categories_df)
