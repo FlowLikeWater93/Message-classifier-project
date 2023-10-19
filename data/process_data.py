@@ -2,6 +2,64 @@ import pandas as pd
 import numpy as np
 import sqlalchemy as db
 
+
+def find_unique_categories(cats):
+    '''
+    Parameters : categories string 
+    - split text by ";"
+    - loop through the list 
+    - split each item by "-" 
+    - select item at index 0
+    - save in a list 
+    Return : list of unique categories 
+    '''
+    unique_catgs = cats.split(';')
+    for i in range(len(unique_catgs)):
+        unique_catgs[i] = unique_catgs[i].split('-')[0]
+    return unique_catgs
+
+def remove_duplicates(df):
+    '''
+    Parameters : pandas dataframe 
+    - use pandas drop_duplicates column 
+    - group by id column and find any rows with more than one occurence 
+    - since there is no way to tell which instance is the correct one, drop messages from the previous step 
+    Return : clean dataframe 
+    '''
+    clean_df = df.drop_duplicates()
+    ids = clean_df.groupby('id').id.count().reset_index(name='count').query('count > 1').id.tolist()
+    if len(ids)>0:
+        clean_df = clean_df[clean_df['id'].isin(ids)==False]
+    return clean_df.copy()
+
+def clean_categories (df):
+    '''
+    Parameters : categories dataframe 
+    - Loop through the dataframe using iterrows()
+    - create a numpy zeros array of size 37 (36 categories plus message_id)
+    - Split categoires column values by ";"
+    - Loop through (nested loop) the list of split categories 
+    - If category at index J is set to 1, then set numpy array at index J to 1
+    - Add message_id to the end of the numpy array 
+    - append each numpy array to the master matrix (normalized_categories)
+    - get unique categories by calling "find_unique_categories"
+    Return : Dataframe that contains the master matrix 
+    '''
+    normalized_categories = []
+    for index, row in df.iterrows():
+        categories_list = row[1].split(';')
+        message_categories = np.zeros(37)
+        for j in range(len(categories_list)):
+            if categories_list[j][-1] == '1':
+                message_categories[j] = 1
+
+        message_categories[-1] = row[0]
+        normalized_categories.append(message_categories.tolist())
+
+    unique_catgs = find_unique_categories(df.iloc[0,1])
+    unique_catgs.append('id')
+    return pd.DataFrame(data=normalized_categories, columns=unique_catgs)
+
 # Load the datasets from the two available csv files
 print('1- Loading the data')
 messages_df = pd.read_csv('messages.csv')
@@ -24,40 +82,14 @@ print('\n We can see that this dataframe has only two columns : \n 1- id : messa
       '\n 2- categories: categories of each message (1 or more)')
 print(' Looking at the first 10 rows, we can notice that the all of the values in the categories columns are almost identical. We have multiple Categroies seperated by a ";". each category has either a 0 or 1 next to it, denoting wether the message falls into the category or not (1 = category)')
 print("\n Let's try to find out how many unique categories we have")
-unique_catgs = categories_df.iloc[0, :].categories.split(';')
-for i in range(len(unique_catgs)):
-    unique_catgs[i] = unique_catgs[i].split('-')[0]
-print(' We have {} unique message categories'.format(len(unique_catgs)))
-print(unique_catgs)
+print(' We have {} unique message categories'.format(len(find_unique_categories(categories_df.iloc[0,1]))))
 print('\n3- Cleaning the data : ')
 print(' 3.1- Dropping duplicates ')
-messages_df = messages_df.drop_duplicates()
-categories_df = categories_df.drop_duplicates()
-print(' Let us check if there are two or more occurrences of any message_id')
-print(messages_df.id.value_counts())
-print('The data is clean\n')
-print(' \nWe will do the same for the categories')
-print(categories_df.id.value_counts())
-print('Some messages have more than one unique categories value')
-ids = categories_df.groupby('id').categories.count().reset_index(name='count').query('count > 1').id.tolist()
-print('We found {} messages with two or more different sets of categories'.format(len(ids)))
-print('Since there is no way to tell which set of categories is the right one for these messages, We will not use these messages for modelling')
-categories_df = categories_df[categories_df['id'].isin(ids)==False]
+messages_df = remove_duplicates(messages_df)
+categories_df = remove_duplicates(categories_df)
 print("\n 3.2- Creating 36 columns (one for each unique category)")
 print(' If message x is in category y only, column y will have value set as 1 and the rest set as 0')
-normalized_categories = []
-for index, row in categories_df.iterrows():
-    categories_list = row[1].split(';')
-    message_categories = np.zeros(37)
-    for j in range(len(categories_list)):
-        if categories_list[j][-1] == '1':
-            message_categories[j] = 1
-
-    message_categories[-1] = row[0]
-    normalized_categories.append(message_categories.tolist())
-
-unique_catgs.append('id')
-clean_categories_df = pd.DataFrame(data=normalized_categories, columns=unique_catgs)
+clean_categories_df = clean_categories(categories_df)
 print(clean_categories_df.info())
 print(' \n 3.3- Merging the two dataframes on the id column : ')
 final_df = messages_df.merge(clean_categories_df, on='id', how='inner')
