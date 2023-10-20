@@ -1,3 +1,4 @@
+import sys
 import pandas as pd
 import numpy as np
 import sqlalchemy as db
@@ -18,6 +19,16 @@ nltk.download('stopwords')
 nltk.download('wordnet')
 
 
+
+def load_data(database_filepath):
+    df_path = 'sqlite:///'+database_filepath
+    engine = db.create_engine(df_path)
+    df = pd.read_sql_table('project2_messages', engine)
+    print('Step 1 : Load clean data\n')
+    print(df.info())
+    return df
+
+
 def message_tokenizer(message):
     '''
     - Parameters : string message
@@ -26,7 +37,9 @@ def message_tokenizer(message):
     - lemmatize tokens
     - Return : list of clean tokens
     '''
-    tokens = nltk.tokenize.word_tokenize(message)
+    msg = re.sub(r"[^a-zA-Z0-9]", " ", message)
+    msg = msg.lower()
+    tokens = nltk.tokenize.word_tokenize(msg)
     tokens = [tk for tk in tokens if tk not in nltk.corpus.stopwords.words("english")]
     final_tokens = []
     for tk in tokens:
@@ -36,7 +49,7 @@ def message_tokenizer(message):
     return final_tokens
 
 
-def make_model():
+def build_model():
     '''
     This function creates a model that classifies text messages into 36 categories
     First, a pipeline is created with three components :
@@ -49,11 +62,12 @@ def make_model():
         ('cntvct', CountVectorizer(tokenizer=message_tokenizer)),
         ('tfidf', TfidfTransformer()),
         ('clf', MultiOutputClassifier(RandomForestClassifier()))])
-
+    
     return pipeline
 
 
-def test_model(y_true, y_predicted):
+
+def evaluate_model(model, X_test, y_true):
     '''
     - Parameters : true y values and predicted y values :
     - Compare both :
@@ -63,6 +77,7 @@ def test_model(y_true, y_predicted):
     - Make sure we don't divide by zero when tp + fp = 0 or tp + fn = 0
     - print the results
     '''
+    y_predicted = model.predict(X_test)
     categories = y_true.columns.tolist()
     print('\n-------------------------------------------------------------------')
     for index in range(len(categories)):
@@ -98,6 +113,7 @@ def test_model(y_true, y_predicted):
     print('\nAccuracy = \n', (y_predicted == y_true).mean())
 
 
+    
 def optimize_model(pipeline):
     '''
     parameters : ML pipeline
@@ -113,35 +129,48 @@ def optimize_model(pipeline):
     return GridSearchCV(pipeline, param_grid=parameters)
 
 
-# Loading clean data from the sqlite database we saved earlier into a pandas dataframe
-engine = db.create_engine('sqlite:///../data/project2.db')
-df = pd.read_sql_table('project2_messages', engine)
-print('Step 1 : Load clean data\n')
-print(df.info())
 
-print('\nStep 2 : clean and normalize')
-print(' 2.1- Removing capitalization')
-df['message'] = df['message'].str.lower()
-print('\n 2.2- Punctuation removal')
-df.message = df.message.apply(lambda x: re.sub(r"[^a-zA-Z0-9]", " ", x))
-print('Taking a look at the text after cleaning\n')
-print(df.head(10).to_string())
-print('\nStep 3 : Modelling')
-print(' 3.1) split the data into train and test')
-X_train, X_test, y_train, y_test = train_test_split(df.message, df.iloc[:, 4:], test_size=0.33, random_state=42)
-print(' 3.2) call the make_model() function that will return our model')
-msg_model = make_model()
-print(' 3.3) fit the model to the data')
-msg_model.fit(X_train, y_train)
-print(' 3.4) test model accuracy')
-y_predicted = msg_model.predict(X_test)
-test_model(y_test, y_predicted)
 
-print('\nStep 4 : Optimize model using GridSearchCV')
-optimized_model = optimize_model(msg_model)
-optimized_model.fit(X_train, y_train)
-y_predicted2 = optimized_model.predict(X_test)
-test_model(y_test, y_predicted2)
-print('\nStep 5 : Saving the model in a pkl file')
-pickle.dump(optimized_model, open('message_classifier.pkl', 'wb'))
-print('... success')
+def save_model(model, model_filepath):
+    pickle.dump(model, open(model_filepath, 'wb'))
+    print('... success')
+
+
+
+
+def main():
+    if len(sys.argv) == 3:
+        database_filepath, model_filepath = sys.argv[1:]
+        print('Loading data...\n    DATABASE: {}'.format(database_filepath))
+        df = load_data(database_filepath)
+        X_train, X_test, y_train, y_test = train_test_split(df.message, df.iloc[:, 4:], test_size=0.25, random_state=42)
+        
+        print('Building and training model ...')
+        model = build_model()
+        model.fit(X_train, y_train)
+        print('Evaluating model...')
+        evaluate_model(model, X_test, y_test)
+        
+        # Run the following block to use GridsearchCV
+        # It was commented out because running takes too long
+        # print('Optimize model with GridsearchCV...')
+        # model = optimize_model(build_model())
+        # model.fit(X_train, y_train)
+        
+        # print('Evaluating model...')
+        # evaluate_model(model, X_test, y_test)
+        
+        print('Saving model...\n    MODEL: {}'.format(model_filepath))
+        save_model(model, model_filepath)
+
+        print('Trained model saved!')
+
+    else:
+        print('Please provide the filepath of the disaster messages database '\
+              'as the first argument and the filepath of the pickle file to '\
+              'save the model to as the second argument. \n\nExample: python '\
+              'train_classifier.py ../data/DisasterResponse.db classifier.pkl')
+
+
+if __name__ == '__main__':
+    main()
