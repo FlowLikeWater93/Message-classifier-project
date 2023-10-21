@@ -17,10 +17,10 @@ This project consists of three parts :
 <br><br>
 Make sure both csv files are in the same directory as the python ETL file
 <br><br>
-Navigate to the "data" folder and run the following command 
+Navigate to the "data" folder and run the following command
 <br><br>
 ```
-python process_data.py
+python process_data.py messages.csv categories.csv project2.db
 ```
 <br>
 2- train_classifier.py :
@@ -28,18 +28,20 @@ python process_data.py
 <br><br>
 Please note that the pkl could not be uploaded to this repository because the file size was too large (larger than 100 MB)
 <br><br>
-Navigate to the "models" folder and run the following command 
+Navigate to the "models" folder and run the following command
 <br><br>
 
 ```
-python train_classifier.py
+python train_classifier.py ../data/project2.db message_classifier.pkl
 ```
 <br>
 3- run.py :
 <br>
 This file reads the clean data generated from step 1 and saved into the SQLite database as well as the saved model message_classifier.pkl
 <br><br>
-Navigate to the "app" folder and run the following command 
+Navigate to the "app" folder and run the following command
+<br><br>
+Make sure you install plotly version 5.11.0 
 <br><br>
 
 ```
@@ -127,7 +129,7 @@ pip install scipy
 <br>
   version 5.11.0 or higher
 <br>
-  To install 
+  To install
 <br>
 ```
 # conda
